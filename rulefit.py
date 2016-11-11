@@ -144,10 +144,12 @@ class RuleFit(object):
                                            .rename(columns={'index': 'vars'})
     if var_names:
       int_effects = int_effects[int_effects.vars.isin(var_names)]
-
-    p = ggplot(aes(x='vars'), int_effects) + \
-          geom_bar(aes(weights='interact_str')) + \
-          geom_bar(aes(weights='exp_null_int'))
+    
+    int_effects_m = pd.melt(int_effects, id_vars='vars',
+                            value_vars=['interact_str', 'exp_null_int'])
+    p = ggplot(aes(x='vars', fill='variable', weight='value'),
+               data=int_effects_m) \
+        + geom_bar()
     print(p)# }}
 
   def plot_variable_importances(self, var_names=None, var_range=None):# {{
@@ -402,7 +404,7 @@ def main():
             y=boston['target'],
             rfmode='class', tree_size=5, mod_sel=3)
 
-  model.generate_interaction_effects(nval=10, n=5, quiet=False)
+  model.generate_interaction_effects(nval=5, n=1, quiet=False)
   print(model.interaction_effects)
   model.plot_interaction_effects() 
 
