@@ -9,10 +9,11 @@ import rpy2.robjects.packages as rpackages
 import rpy2.rinterface as rinterface
 
 from ggplot import *
-from rpy2.robjects import pandas2ri
+from rpy2.robjects import pandas2ri, numpy2ri
 from rpy2.robjects.packages import importr
 from rpy2.robjects.vectors import StrVector, IntVector
 
+#TODO: Write functions for higher level interaction effects
 
 class RuleFit(object):
   """Wrapper for rulefit algorithm in R
@@ -46,6 +47,8 @@ class RuleFit(object):
       rfhome - path to R rulefit directory.
     """
     pandas2ri.activate()
+    numpy2ri.activate()
+
     utils = importr('utils')
     utils.chooseCRANmirror(ind=1)
     robjects.globalenv['platform'] = platform
@@ -103,7 +106,7 @@ class RuleFit(object):
                """
     robjects.r(null_str)(n, quiet)# }}
 
-  def generate_interaction_effects(self, nval=10, n=10, quiet=False):# {{
+  def generate_intr_effects(self, nval=10, n=10, quiet=False):# {{
     """ Loads R variable interaction effect objects
     Args:
       nval - Number of evaluation points used for calculation
@@ -135,22 +138,70 @@ class RuleFit(object):
 
     self._interaction_effects = interact # }}
 
-  def plot_interaction_effects(self, var_names=None):# {{
-    """ Plots interaction effects for a specific set of variables.
+  def two_var_intr_effects(self, target, vars, nval=100, plot=True):# {{
+    """ Loads first level interactions.
     Args:
-      var_names - A list of variable names to plot. If None, will plot all
+      target - Variable identifier (column name or number) specifying the 
+               target variable
+      vars - List of variable identifiers (column names or numbers) specifying
+             other selected variables. Must not contain target
+      nval - Number of evaluation points used for calculation.
+      plot - Determines whether or not to plot results.
+    Returns: Pandas dataframe of interaction effects
     """
-    int_effects = self._interaction_effects.reset_index() \
-                                           .rename(columns={'index': 'vars'})
-    if var_names:
-      int_effects = int_effects[int_effects.vars.isin(var_names)]
+    # Check if null.models have already been generated
+    check_str = """
+                function(){
+                  if(exists("null.models")){
+                    return(T)
+                  } else {
+                    return(F)
+                  }
+                }
+                """
+    if not robjects.r(check_str)()[0]:
+      print('Null models not generated, generating null models (n=10)')
+      self._generate_interaction_null_models(10, quiet=False)
     
+    int_str = """
+              function(target, vars, nval){
+                interactions <- twovarint(tvar=target, vars=vars, null.models, 
+                                          nval=nval, plot=F)
+              }
+              """
+    # Check the input type. If int, add one, if string do nothing.
+    target = target if type(target) is str else target+1
+    vars = [var if type(var) is str else var+1 for var in vars]  
+    r_interact = robjects.r(int_str)(target, robjects.Vector(np.array(vars)),
+                                     nval)
+    interact = pd.DataFrame({'interact_str': list(r_interact[0]),
+                             'exp_null_int': list(r_interact[1]),
+                             'std_null_int': list(r_interact[2])},
+                            index=vars)
+    int_effects = interact.reset_index().rename(columns={'index': 'vars'})
     int_effects_m = pd.melt(int_effects, id_vars='vars',
                             value_vars=['interact_str', 'exp_null_int'])
     p = ggplot(aes(x='vars', fill='variable', weight='value'),
                data=int_effects_m) \
-        + geom_bar()
-    print(p)# }}
+          + geom_bar()
+    print(p)
+    return interact# }}
+
+  def three_var_intr_effects(self, tvar1, tvar2, vars, nval=100, plot=True):
+    """ Loads second level interactions between 3 variables
+    Args:
+      tvar1 - Variable identifier (column name or number) specifying the 
+             first target variable
+      tvar2 - Variable identifier (column name or number) specifying the 
+             second target variable
+      vars - List of variable identifiers (column names or numbers) specifying
+             other selected variables. Must not contain target.
+      nval - Number of evaluation points used for calculation.
+      plot - Determines whether or not to plot results.
+    Returns:
+      Pandas dataframe of interaction effects
+    """
+      
 
   def plot_variable_importances(self, var_names=None, var_range=None):# {{
     """ Plot variable importances
@@ -393,21 +444,18 @@ class RuleFit(object):
     return fit_stats# }}
 
 def main():
-
-  boston = pd.read_csv('./boston.csv', index_col=False)
+  
+  boston = pd.read_csv('./datasets/boston.csv', index_col=False)
   boston['target'] = np.select([boston.medv > boston.medv.quantile(0.5)],
-                                [1], [-1])
-
+                                 [1], [-1])
   model = RuleFit('linux',
                   '/home/riley/R/x86_64-pc-linux-gnu-library/3.3/rulefit')
   model.fit(x=boston.drop(['medv', 'target'], axis=1),
             y=boston['target'],
             rfmode='class', tree_size=5, mod_sel=3)
-
-  model.generate_interaction_effects(nval=5, n=1, quiet=False)
-  print(model.interaction_effects)
-  model.plot_interaction_effects() 
-
+  
+  model.generate_intr_effects(nval=5, n=1, quiet=False)
+  model.two_var_intr_effects(0, range(1, model.data['x'].shape[1]-1))
 
 
 
