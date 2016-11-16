@@ -19,7 +19,7 @@ from rpy2.robjects.vectors import StrVector, IntVector
 class RuleFit(object):
   """Wrapper for rulefit algorithm in R
   """
-
+# ===== Private Functions ===== {{{
   def __init__(self, platform, rfhome):# {{{
     # Initialize R instance.
     self._initialize_r_instance(platform, rfhome)
@@ -93,7 +93,9 @@ class RuleFit(object):
       self._data['y'] = y
 
     self._variable_importances = self._load_r_variable_importance_objects() # }}}
+# }}}
 
+# ===== Variable Interactions ===== {{{
   def _generate_interaction_null_models(self, n, quiet): #{{{
     """ Generates bootstrapped null interaction models to calibrate 
         interaction effects. See FP 2004 8.3. This will create a global object
@@ -261,6 +263,11 @@ class RuleFit(object):
                                                                         tvar2))
       print(p)
     return interact# }}}
+# }}}
+
+def get_rules(self):
+    """ Extract generated rules from model object.
+    """
 
   def plot_variable_importances(self, var_names=None, var_range=None):# {{{
     """ Plot variable importances
