@@ -18,7 +18,7 @@ class RuleFit(object):
   """Wrapper for rulefit algorithm in R
   """
 
-  def __init__(self, platform, rfhome):# {{
+  def __init__(self, platform, rfhome):# {{{
     # Initialize R instance.
     self._initialize_r_instance(platform, rfhome)
 
@@ -37,9 +37,9 @@ class RuleFit(object):
 
   @property
   def interaction_effects(self):
-    return self._interaction_effects# }}
+    return self._interaction_effects# }}}
 
-  def _initialize_r_instance(self, platform, rfhome):# {{
+  def _initialize_r_instance(self, platform, rfhome):# {{{
     """Initialize R instance, declare global vars, and import rulefit
     Args:
       platform - OS. windows, linux or mac
@@ -58,9 +58,9 @@ class RuleFit(object):
                  install.packages('akima', lib=rfhome)
                  library(akima, lib.loc=rfhome)
                  """
-    robjects.r(import_str)
+    robjects.r(import_str) # }}}
 
-  def _load_r_variable_importance_objects(self):
+  def _load_r_variable_importance_objects(self): # {{{
     """ Loads R variable importance objects
 
     Returns: Pandas dataframe of variable importances
@@ -73,9 +73,9 @@ class RuleFit(object):
     columns=['variable_importance'])
     temp_var_imp = temp_var_imp.reset_index() \
                                .rename(columns={'index': 'var_name'})
-    return temp_var_imp# }}
+    return temp_var_imp# }}}
 
-  def _update_model_properties(self, x, y):# {{
+  def _update_model_properties(self, x, y):# {{{
     """ Updates internal values after fitting
     """
 
@@ -87,9 +87,9 @@ class RuleFit(object):
       self._data['x'] = x
       self._data['y'] = y
 
-    self._variable_importances = self._load_r_variable_importance_objects()
+    self._variable_importances = self._load_r_variable_importance_objects() # }}}
 
-  def _generate_interaction_null_models(self, n, quiet):
+  def _generate_interaction_null_models(self, n, quiet): #{{{
     """ Generates bootstrapped null interaction models to calibrate 
         interaction effects. See FP 2004 8.3. This will create a global object
         in the R instance. This function needs to be called before calling
@@ -103,9 +103,9 @@ class RuleFit(object):
                  null.models <<- intnull(ntimes=n, quiet=quiet)
                }
                """
-    robjects.r(null_str)(n, quiet)# }}
+    robjects.r(null_str)(n, quiet)# }}}
 
-  def generate_intr_effects(self, nval=10, n=10, quiet=False, plot=True):# {{
+  def generate_intr_effects(self, nval=10, n=10, quiet=False, plot=True):# {{{
     """ Loads R variable interaction effect objects
     Args:
       nval - Number of evaluation points used for calculation
@@ -145,9 +145,9 @@ class RuleFit(object):
                  data=int_effects_m) \
             + geom_bar() \
             + labs(title='Interaction Effects')
-      print(p)  # }}
+      print(p)  # }}}
 
-  def two_var_intr_effects(self, target, vars, nval=100, plot=True):# {{
+  def two_var_intr_effects(self, target, vars, nval=100, plot=True):# {{{
     """ Loads first level interactions.
     Args:
       target - Variable identifier (column name or number) specifying the 
@@ -197,9 +197,9 @@ class RuleFit(object):
             + geom_bar() \
             + labs(title='{} interaction effects'.format(target))
       print(p)
-    return interact# }}
+    return interact# }}}
 
-  def three_var_intr_effects(self, tvar1, tvar2, vars, nval=100, plot=True):
+  def three_var_intr_effects(self, tvar1, tvar2, vars, nval=100, plot=True): # {{{
     """ Loads second level interactions between 3 variables
     Args:
       tvar1 - Variable identifier (column name or number) specifying the 
@@ -253,9 +253,9 @@ class RuleFit(object):
             # + geom_bar() \
             # + labs(title='{} interaction effects'.format(target))
       # print(p)
-    return interact# }}
+    return interact# }}}
 
-  def plot_variable_importances(self, var_names=None, var_range=None):# {{
+  def plot_variable_importances(self, var_names=None, var_range=None):# {{{
     """ Plot variable importances
     Args:
       var_names - A list of variable names to plot. If None, will plot
@@ -280,9 +280,9 @@ class RuleFit(object):
           geom_bar(fill='steelblue') + \
           labs(title='Variable Importances')
 
-    print(p)# }}
+    print(p)# }}}
 
-  def predict(self, x):# {{
+  def predict(self, x):# {{{
     """ Predict values using a trained model
     Args:
       x - A pandas dataframe of input variables
@@ -297,10 +297,9 @@ class RuleFit(object):
                   }
                   """
     predict = np.array(robjects.r(predict_str)(x))
-    return predict
+    return predict  # }}}
 
-
-  def xval(self, nfold=10, quiet=False):
+  def xval(self, nfold=10, quiet=False):  # {{{
     """ Performs cross validation using current model. Will update 
         corresponding properties in rulefit object
     Args:
@@ -326,15 +325,15 @@ class RuleFit(object):
     else:  # Regression
       self._xval_results = {'pred': list(xval[0]),
                             'avg_abs_err': xval[1][0],
-                            'rms': xval[2][0]}# }}
+                            'rms': xval[2][0]}# }}}
 
-  def fit(self, x, y, wt=None, cat_vars=None, not_used=None,# {{
+  def fit(self, x, y, wt=None, cat_vars=None, not_used=None,# {{{
           xmiss=9.0e30, rfmode='class', sparse=1, test_reps=None,
           test_fract=0.2, mod_sel=3, model_type='both', tree_size=4,
           max_rules=2000, max_trms=500, costs=[1, 1], trim_qntl=0.025,
           samp_fract=None, inter_supp=3.0, memory_par=0.01, conv_thr=1.0e-3,
           quiet=False, tree_store=10e6, cat_store=10e6):
-    """ Fit rulefit model. This function will populate the data and variable# {{
+    """ Fit rulefit model. This function will populate the data and variable
         importance fields of the Rulefit object.
     Args:
       x -             Pandas dataframe of training data. 
@@ -417,7 +416,7 @@ class RuleFit(object):
     Returns:
       A tuple of (cross-validated criterion value, associated 
       uncertainty estimate, number of terms in the model) 
-    """# }}
+    """
 
 
     # Set default values
@@ -493,7 +492,7 @@ class RuleFit(object):
     robjects.globalenv['stats'][1][0],
     robjects.globalenv['stats'][2][0])
 
-    return fit_stats# }}
+    return fit_stats# }}}
 
 def main():
   
