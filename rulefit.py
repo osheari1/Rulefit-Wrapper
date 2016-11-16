@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import readline
 import matplotlib
+import traceback
 
 import rpy2.robjects as robjects 
 import rpy2.robjects.packages as rpackages
@@ -47,18 +48,22 @@ class RuleFit(object):
     """
     pandas2ri.activate()
     numpy2ri.activate()
+    try:
+      utils = importr('utils')
+      utils.chooseCRANmirror(ind=1)
+      robjects.globalenv['platform'] = platform
+      robjects.globalenv['rfhome'] = rfhome
 
-    utils = importr('utils')
-    utils.chooseCRANmirror(ind=1)
-    robjects.globalenv['platform'] = platform
-    robjects.globalenv['rfhome'] = rfhome
+      import_str = """
+                   source(paste(rfhome, '/rulefit.r', sep=''))
+                   install.packages('akima', lib=rfhome)
+                   library(akima, lib.loc=rfhome)
+                   """
+      robjects.r(import_str)
+    except rpy2.rinterface.RRuntimeError as e:
+      print('RRuntimeError thrown. Try rerunning')
+      print('Traceback: {}'.traceback.format_exc()) #}}}
 
-    import_str = """
-                 source(paste(rfhome, '/rulefit.r', sep=''))
-                 install.packages('akima', lib=rfhome)
-                 library(akima, lib.loc=rfhome)
-                 """
-    robjects.r(import_str) # }}}
 
   def _load_r_variable_importance_objects(self): # {{{
     """ Loads R variable importance objects
@@ -195,7 +200,7 @@ class RuleFit(object):
       p = ggplot(aes(x='vars', fill='variable', weight='value'),
                  data=int_effects_m) \
             + geom_bar() \
-            + labs(title='{} interaction effects'.format(target))
+            + labs(title='Two-var interaction effects - {}'.format(target))
       print(p)
     return interact# }}}
 
@@ -229,8 +234,9 @@ class RuleFit(object):
     
     int_str = """
               function(tvar1, tvar2, vars, nval){
-                interactions <- twovarint(tvar=target, vars=vars, null.models, 
-                                          nval=nval, plot=F)
+                interactions <- threevarint(tvar1=tvar1, tvar2=tvar2,
+                                            vars=vars, null.models, 
+                                            nval=nval, plot=F)
               }
               """
     # Check the input type. If int, add one, if string do nothing.
@@ -244,15 +250,16 @@ class RuleFit(object):
                              'std_null_int': list(r_interact[2])},
                             index=vars)
     
-    # if plot:
-      # int_effects = interact.reset_index().rename(columns={'index': 'vars'})
-      # int_effects_m = pd.melt(int_effects, id_vars='vars',
-                              # value_vars=['interact_str', 'exp_null_int'])
-      # p = ggplot(aes(x='vars', fill='variable', weight='value'),
-                 # data=int_effects_m) \
-            # + geom_bar() \
-            # + labs(title='{} interaction effects'.format(target))
-      # print(p)
+    if plot:
+      int_effects = interact.reset_index().rename(columns={'index': 'vars'})
+      int_effects_m = pd.melt(int_effects, id_vars='vars',
+                              value_vars=['interact_str', 'exp_null_int'])
+      p = ggplot(aes(x='vars', fill='variable', weight='value'),
+                 data=int_effects_m) \
+            + geom_bar() \
+            + labs(title='Three-var interaction effects - {} {}'.format(tvar1,
+                                                                        tvar2))
+      print(p)
     return interact# }}}
 
   def plot_variable_importances(self, var_names=None, var_range=None):# {{{
@@ -499,23 +506,24 @@ def main():
   boston = pd.read_csv('./datasets/boston.csv', index_col=False)
   boston['target'] = np.select([boston.medv > boston.medv.quantile(0.5)],
                                  [1], [-1])
-  print(boston.head())
-  model = RuleFit('linux',
-                  '/home/riley/R/x86_64-pc-linux-gnu-library/3.3/rulefit')
+  rf_path_w = '/home/riley/R/x86_64-pc-linux-gnu-library/3.3/Rulefit'     
+  rf_path_h = '/home/riley/R/x86_64-pc-linux-gnu-library/3.3/rulefit'
+
+  model = RuleFit('linux',rf_path_w)
   model.fit(x=boston.drop(['medv', 'target'], axis=1),
             y=boston['target'],
             rfmode='class', tree_size=5, mod_sel=3)
+
+  model.generate_intr_effects(nval=100, n=10, quiet=False, plot=True)
   
-  # model.generate_intr_effects(nval=5, n=1, quiet=False, plot=True)
-  
-  # two_var_int = model.two_var_intr_effects(
-      # target=0,
-      # vars=range(1, model.data['x'].shape[1]-1))
+  two_var_int = model.two_var_intr_effects(
+      target='rm',
+      vars=list(set(model.data['x'].columns.values).difference(['rm'])))
 
   thr_var_int = model.three_var_intr_effects(
-      tvar1=0,
-      tvar2=1,
-      vars=range(2, model.data['x'].shape[1]-1))
+      tvar1='rm',
+      tvar2='dis',
+      vars=list(set(model.data['x'].columns.values).difference(['rm', 'dis'])))
 
 
 if __name__ == '__main__':
