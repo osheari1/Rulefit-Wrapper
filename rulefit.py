@@ -4,6 +4,7 @@ import os
 import readline
 import matplotlib
 import traceback
+import rpy2
 
 import rpy2.robjects as robjects 
 import rpy2.robjects.packages as rpackages
@@ -63,7 +64,6 @@ class RuleFit(object):
     except rpy2.rinterface.RRuntimeError as e:
       print('RRuntimeError thrown. Try rerunning')
       print('Traceback: {}'.traceback.format_exc()) #}}}
-
 
   def _load_r_variable_importance_objects(self): # {{{
     """ Loads R variable importance objects
@@ -516,14 +516,14 @@ def main():
 
   model.generate_intr_effects(nval=100, n=10, quiet=False, plot=True)
   
-  two_var_int = model.two_var_intr_effects(
-      target='rm',
-      vars=list(set(model.data['x'].columns.values).difference(['rm'])))
+  # two_var_int = model.two_var_intr_effects(
+      # target='rm',
+      # vars=list(set(model.data['x'].columns.values).difference(['rm'])))
 
-  thr_var_int = model.three_var_intr_effects(
-      tvar1='rm',
-      tvar2='dis',
-      vars=list(set(model.data['x'].columns.values).difference(['rm', 'dis'])))
+  # thr_var_int = model.three_var_intr_effects(
+      # tvar1='rm',
+      # tvar2='dis',
+      # vars=list(set(model.data['x'].columns.values).difference(['rm', 'dis'])))
 
 
 if __name__ == '__main__':
