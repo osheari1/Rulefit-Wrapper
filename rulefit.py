@@ -13,7 +13,6 @@ from rpy2.robjects import pandas2ri, numpy2ri
 from rpy2.robjects.packages import importr
 from rpy2.robjects.vectors import StrVector, IntVector
 
-#TODO: Write functions for higher level interaction effects
 
 class RuleFit(object):
   """Wrapper for rulefit algorithm in R
@@ -106,7 +105,7 @@ class RuleFit(object):
                """
     robjects.r(null_str)(n, quiet)# }}
 
-  def generate_intr_effects(self, nval=10, n=10, quiet=False):# {{
+  def generate_intr_effects(self, nval=10, n=10, quiet=False, plot=True):# {{
     """ Loads R variable interaction effect objects
     Args:
       nval - Number of evaluation points used for calculation
@@ -136,7 +135,17 @@ class RuleFit(object):
                              'std_null_int': list(r_interact[2])},
                             index=self._data['x'].columns)
 
-    self._interaction_effects = interact # }}
+    self._interaction_effects = interact
+
+    if plot:
+      int_effects = interact.reset_index().rename(columns={'index': 'vars'})
+      int_effects_m = pd.melt(int_effects, id_vars='vars',
+                              value_vars=['interact_str', 'exp_null_int'])
+      p = ggplot(aes(x='vars', fill='variable', weight='value'),
+                 data=int_effects_m) \
+            + geom_bar() \
+            + labs(title='Interaction Effects')
+      print(p)  # }}
 
   def two_var_intr_effects(self, target, vars, nval=100, plot=True):# {{
     """ Loads first level interactions.
@@ -178,13 +187,16 @@ class RuleFit(object):
                              'exp_null_int': list(r_interact[1]),
                              'std_null_int': list(r_interact[2])},
                             index=vars)
-    int_effects = interact.reset_index().rename(columns={'index': 'vars'})
-    int_effects_m = pd.melt(int_effects, id_vars='vars',
-                            value_vars=['interact_str', 'exp_null_int'])
-    p = ggplot(aes(x='vars', fill='variable', weight='value'),
-               data=int_effects_m) \
-          + geom_bar()
-    print(p)
+
+    if plot:
+      int_effects = interact.reset_index().rename(columns={'index': 'vars'})
+      int_effects_m = pd.melt(int_effects, id_vars='vars',
+                              value_vars=['interact_str', 'exp_null_int'])
+      p = ggplot(aes(x='vars', fill='variable', weight='value'),
+                 data=int_effects_m) \
+            + geom_bar() \
+            + labs(title='{} interaction effects'.format(target))
+      print(p)
     return interact# }}
 
   def three_var_intr_effects(self, tvar1, tvar2, vars, nval=100, plot=True):
@@ -201,7 +213,47 @@ class RuleFit(object):
     Returns:
       Pandas dataframe of interaction effects
     """
-      
+    # Check if null.models have already been generated
+    check_str = """
+                function(){
+                  if(exists("null.models")){
+                    return(T)
+                  } else {
+                    return(F)
+                  }
+                }
+                """
+    if not robjects.r(check_str)()[0]:
+      print('Null models not generated, generating null models (n=10)')
+      self._generate_interaction_null_models(10, quiet=False)
+    
+    int_str = """
+              function(tvar1, tvar2, vars, nval){
+                interactions <- twovarint(tvar=target, vars=vars, null.models, 
+                                          nval=nval, plot=F)
+              }
+              """
+    # Check the input type. If int, add one, if string do nothing.
+    tvar1 = tvar1 if type(tvar1) is str else tvar1+1
+    tvar2 = tvar2 if type(tvar2) is str else tvar2+1
+    vars = [var if type(var) is str else var+1 for var in vars]  
+    r_interact = robjects.r(int_str)(tvar1, tvar2,
+                                     robjects.Vector(np.array(vars)), nval)
+    interact = pd.DataFrame({'interact_str': list(r_interact[0]),
+                             'exp_null_int': list(r_interact[1]),
+                             'std_null_int': list(r_interact[2])},
+                            index=vars)
+    
+    # if plot:
+      # int_effects = interact.reset_index().rename(columns={'index': 'vars'})
+      # int_effects_m = pd.melt(int_effects, id_vars='vars',
+                              # value_vars=['interact_str', 'exp_null_int'])
+      # p = ggplot(aes(x='vars', fill='variable', weight='value'),
+                 # data=int_effects_m) \
+            # + geom_bar() \
+            # + labs(title='{} interaction effects'.format(target))
+      # print(p)
+    return interact# }}
 
   def plot_variable_importances(self, var_names=None, var_range=None):# {{
     """ Plot variable importances
@@ -448,15 +500,23 @@ def main():
   boston = pd.read_csv('./datasets/boston.csv', index_col=False)
   boston['target'] = np.select([boston.medv > boston.medv.quantile(0.5)],
                                  [1], [-1])
+  print(boston.head())
   model = RuleFit('linux',
                   '/home/riley/R/x86_64-pc-linux-gnu-library/3.3/rulefit')
   model.fit(x=boston.drop(['medv', 'target'], axis=1),
             y=boston['target'],
             rfmode='class', tree_size=5, mod_sel=3)
   
-  model.generate_intr_effects(nval=5, n=1, quiet=False)
-  model.two_var_intr_effects(0, range(1, model.data['x'].shape[1]-1))
+  # model.generate_intr_effects(nval=5, n=1, quiet=False, plot=True)
+  
+  # two_var_int = model.two_var_intr_effects(
+      # target=0,
+      # vars=range(1, model.data['x'].shape[1]-1))
 
+  thr_var_int = model.three_var_intr_effects(
+      tvar1=0,
+      tvar2=1,
+      vars=range(2, model.data['x'].shape[1]-1))
 
 
 if __name__ == '__main__':
