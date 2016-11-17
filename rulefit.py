@@ -265,9 +265,10 @@ class RuleFit(object):
     return interact# }}}
 # }}}
 
-def get_rules(self):
-    """ Extract generated rules from model object.
-    """
+ def get_rules(self):
+   """ Extract generated rules from model object.
+   """
+  
 
   def plot_variable_importances(self, var_names=None, var_range=None):# {{{
     """ Plot variable importances
