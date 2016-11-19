@@ -124,7 +124,9 @@ class RuleFit(object):
                   }
                 }
                 """
+    self.logger.info("Generating rules ...")
     robjects.r(rules_str)(beg, end, x, wt)
+
 
 # ===== Variable Interactions ===== {{{
   def _generate_interaction_null_models(self, n, quiet): #{{{
@@ -515,6 +517,10 @@ def main():
   boston = pd.read_csv('./datasets/boston.csv', index_col=False)
   boston['target'] = np.select([boston.medv > boston.medv.quantile(0.5)],
                                  [1], [-1])
+  boston['lstat_cat'] = pd.cut(boston.lstat, 10,
+      labels=['a','b','c','d','e','f','g','h','i','j']) 
+  boston.drop('lstat', axis=1, inplace=True)
+
   rf_path_w = '/home/riley/R/x86_64-pc-linux-gnu-library/3.3/Rulefit'     
   rf_path_h = '/home/riley/R/x86_64-pc-linux-gnu-library/3.3/rulefit'
 
@@ -522,8 +528,8 @@ def main():
   model.fit(x=boston.drop(['medv', 'target'], axis=1),
             y=boston['target'],
             rfmode='class', tree_size=5, mod_sel=3,
-            max_rules=2000)
-  model.get_rules()
+            max_rules=500)
+  model.get_rules(beg=1, end=200)
 
   # model.generate_intr_effects(nval=100, n=10, quiet=False, plot=True)
   
