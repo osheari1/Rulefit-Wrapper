@@ -58,7 +58,8 @@ class RuleFit(object):
       utils.chooseCRANmirror(ind=1)
       robjects.globalenv['platform'] = platform
       robjects.globalenv['rfhome'] = rfhome
-
+      self.rfhome = rfhome
+      self.platform = platform
       import_str = """
                    source(paste(rfhome, '/rulefit.r', sep=''))
                    install.packages('akima', lib=rfhome)
@@ -105,7 +106,7 @@ class RuleFit(object):
 
 # }}}
 
-  def get_rules(self, beg=1, end=10, x=None, wt=None):
+  def generate_rules(self, beg=1, end=2000, x=None, wt=None):
     """ Extract generated rules from model object.
     """
 
@@ -117,6 +118,9 @@ class RuleFit(object):
 
     rules_str = """
                 function(beg, end, x, wt){
+                  if(end > integer(fit[[1]][length(fit[[1]])])){
+                    end <- as.integer(fit[[1]][length(fit[[1]])])
+                  } 
                   if(!is.null(x)){
                     rules(beg, end, x, wt)
                   } else {
@@ -126,7 +130,8 @@ class RuleFit(object):
                 """
     self.logger.info("Generating rules ...")
     robjects.r(rules_str)(beg, end, x, wt)
-
+    self._rules = utils.parse_rules(os.path.join(self.rfhome,'rulesout.hlp'))
+    
 
 # ===== Variable Interactions ===== {{{
   def _generate_interaction_null_models(self, n, quiet): #{{{
@@ -529,8 +534,8 @@ def main():
             y=boston['target'],
             rfmode='class', tree_size=5, mod_sel=3,
             max_rules=500)
-  model.get_rules(beg=1, end=200)
-
+  model.generate_rules(beg=1, end=2000)
+  pprint(model._rules)
   # model.generate_intr_effects(nval=100, n=10, quiet=False, plot=True)
   
   # two_var_int = model.two_var_intr_effects(
