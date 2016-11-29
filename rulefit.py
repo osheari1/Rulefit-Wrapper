@@ -109,8 +109,15 @@ class RuleFit(object):
 
 # }}}
 
-  def generate_rules(self, beg=1, end=2000, x=None, wt=None):# {{{
-    """ Extract generated rules from model object.
+  def generate_rules(self, x=None, wt=None):# {{{
+    """ Extract generated rules from model object. This populations the rules
+        property.
+    Args:
+      beg - Starting rule number (most important)
+      end - Ending 
+      x - A pandas dataframe containing a subset of datapoints over which to 
+          calculate rule importance.
+      wt - A list of weights for observations stored in x. 
     """
 
     if not wt:
