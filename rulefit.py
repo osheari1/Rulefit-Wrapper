@@ -4,26 +4,33 @@ import os
 import readline
 import matplotlib
 import traceback
+import utils
 import rpy2
-
 import rpy2.robjects as robjects 
 import rpy2.robjects.packages as rpackages
 import rpy2.rinterface as rinterface
+import ggplot as gg
 
-from ggplot import *
+
+from pprint import pprint
+
 from rpy2.robjects import pandas2ri, numpy2ri
 from rpy2.robjects.packages import importr
 from rpy2.robjects.vectors import StrVector, IntVector
 
-
 class RuleFit(object):
   """Wrapper for rulefit algorithm in R
   """
-
-  def __init__(self, platform, rfhome):# {{{
+# ===== Initialization Functions ===== {{{
+  def __init__(self, platform, rfhome, log_path=None):# {{{
     # Initialize R instance.
     self._initialize_r_instance(platform, rfhome)
-
+    self.logger = utils.get_logger(log_path if log_path else \
+                                            os.path.join(os.getcwd(),
+                                                         'rulefit.log'))
+  @property
+  def rules(self):
+    return self._rules
 
   @property
   def xval_results(self):
@@ -54,7 +61,8 @@ class RuleFit(object):
       utils.chooseCRANmirror(ind=1)
       robjects.globalenv['platform'] = platform
       robjects.globalenv['rfhome'] = rfhome
-
+      self.rfhome = rfhome
+      self.platform = platform
       import_str = """
                    source(paste(rfhome, '/rulefit.r', sep=''))
                    install.packages('akima', lib=rfhome)
@@ -62,9 +70,14 @@ class RuleFit(object):
                    """
       robjects.r(import_str)
     except rpy2.rinterface.RRuntimeError as e:
-      print('RRuntimeError thrown. Try rerunning')
-      print('Traceback: {}'.traceback.format_exc()) #}}}
+      self.logger.error('RRuntimeError thrown. Try to re-run or check R'
+                        ' rulefit path. Traceback: {}' \
+                            .format(traceback.format_exc()))
+# }}}
 
+# }}}
+
+# ===== Utility Functions ===== {{{
   def _load_r_variable_importance_objects(self): # {{{
     """ Loads R variable importance objects
 
@@ -94,6 +107,41 @@ class RuleFit(object):
 
     self._variable_importances = self._load_r_variable_importance_objects() # }}}
 
+# }}}
+
+  def generate_rules(self, x=None, wt=None):# {{{
+    """ Extract generated rules from model object. This populations the rules
+        property.
+    Args:
+      beg - Starting rule number (most important)
+      end - Ending 
+      x - A pandas dataframe containing a subset of datapoints over which to 
+          calculate rule importance.
+      wt - A list of weights for observations stored in x. 
+    """
+
+    if not wt:
+      wt = np.arange(1, self.data['x'].shape[0] + 1) 
+    if not x:
+      x = rinterface.NULL
+
+    rules_str = """
+                function(beg, end, x, wt){
+                  if(end > integer(fit[[1]][length(fit[[1]])])){
+                    end <- as.integer(fit[[1]][length(fit[[1]])])
+                  } 
+                  if(!is.null(x)){
+                    rules(beg, end, x, wt)
+                  } else {
+                    rules(beg=beg, end=end, wt=wt)
+                  }
+                }
+                """
+    self.logger.info("Generating rules ...")
+    robjects.r(rules_str)(beg, end, x, wt)
+    self._rules = utils.parse_rules(os.path.join(self.rfhome,'rulesout.hlp'))# }}}
+    
+# ===== Variable Interactions ===== {{{
   def _generate_interaction_null_models(self, n, quiet): #{{{
     """ Generates bootstrapped null interaction models to calibrate 
         interaction effects. See FP 2004 8.3. This will create a global object
@@ -146,10 +194,10 @@ class RuleFit(object):
       int_effects = interact.reset_index().rename(columns={'index': 'vars'})
       int_effects_m = pd.melt(int_effects, id_vars='vars',
                               value_vars=['interact_str', 'exp_null_int'])
-      p = ggplot(aes(x='vars', fill='variable', weight='value'),
-                 data=int_effects_m) \
-            + geom_bar() \
-            + labs(title='Interaction Effects')
+      p = gg.ggplot(gg.aes(x='vars', fill='variable', weight='value'),
+                        data=int_effects_m) \
+            + gg.geom_bar() \
+            + gg(title='Interaction Effects')
       print(p)  # }}}
 
   def two_var_intr_effects(self, target, vars, nval=100, plot=True):# {{{
@@ -174,7 +222,8 @@ class RuleFit(object):
                 }
                 """
     if not robjects.r(check_str)()[0]:
-      print('Null models not generated, generating null models (n=10)')
+      self.logger.info('Null models not generated, generating null models '
+                       '(n=10)')
       self._generate_interaction_null_models(10, quiet=False)
     
     int_str = """
@@ -197,10 +246,10 @@ class RuleFit(object):
       int_effects = interact.reset_index().rename(columns={'index': 'vars'})
       int_effects_m = pd.melt(int_effects, id_vars='vars',
                               value_vars=['interact_str', 'exp_null_int'])
-      p = ggplot(aes(x='vars', fill='variable', weight='value'),
-                 data=int_effects_m) \
-            + geom_bar() \
-            + labs(title='Two-var interaction effects - {}'.format(target))
+      p = gg.ggplot(gg.aes(x='vars', fill='variable', weight='value'),
+                    data=int_effects_m) \
+            + gg.geom_bar() \
+            + gg.labs(title='Two-var interaction effects - {}'.format(target))
       print(p)
     return interact# }}}
 
@@ -229,7 +278,8 @@ class RuleFit(object):
                 }
                 """
     if not robjects.r(check_str)()[0]:
-      print('Null models not generated, generating null models (n=10)')
+      self.logger.info('Null models not generated, generating null models '
+                       '(n=10)')
       self._generate_interaction_null_models(10, quiet=False)
     
     int_str = """
@@ -254,40 +304,14 @@ class RuleFit(object):
       int_effects = interact.reset_index().rename(columns={'index': 'vars'})
       int_effects_m = pd.melt(int_effects, id_vars='vars',
                               value_vars=['interact_str', 'exp_null_int'])
-      p = ggplot(aes(x='vars', fill='variable', weight='value'),
-                 data=int_effects_m) \
-            + geom_bar() \
-            + labs(title='Three-var interaction effects - {} {}'.format(tvar1,
-                                                                        tvar2))
+      p = gg.ggplot(gg.aes(x='vars', fill='variable', weight='value'),
+                    data=int_effects_m) \
+            + gg.geom_bar() \
+            + gg.labs(title='Three-var interaction effects - {} {}' \
+                                                        .format(tvar1, tvar2))
       print(p)
     return interact# }}}
-
-  def plot_variable_importances(self, var_names=None, var_range=None):# {{{
-    """ Plot variable importances
-    Args:
-      var_names - A list of variable names to plot. If None, will plot
-                  all variables
-      var_range - A range of x variables to plot. eg. If a list
-                  [1, 2, 3, 6] was passed, the top 1, 2, 3, 6 most 
-                  important variables will be plotted. If both this 
-                  and var_names is passed, var_names will be 
-                  overridden.
-    """
-    if var_names and var_range:
-      plot_data = self._variable_importances.iloc[var_range, :]
-    if var_range:
-      plot_data = self._variable_importances.iloc[var_range, :]
-    if var_names:
-      plot_data = self._variable_importances[self._variable_importances \
-                      .var_name \
-                      .isin(var_names)]
-
-    p = ggplot(aes(x='var_name', weight='variable_importance'), 
-               self._variable_importances) + \
-          geom_bar(fill='steelblue') + \
-          labs(title='Variable Importances')
-
-    print(p)# }}}
+# }}}
 
   def predict(self, x):# {{{
     """ Predict values using a trained model
@@ -340,7 +364,7 @@ class RuleFit(object):
           max_rules=2000, max_trms=500, costs=[1, 1], trim_qntl=0.025,
           samp_fract=None, inter_supp=3.0, memory_par=0.01, conv_thr=1.0e-3,
           quiet=False, tree_store=10e6, cat_store=10e6):
-    """ Fit rulefit model. This function will populate the data and variable
+    """ Fit rulefit model. This function will populate the data and variable # {{{
         importance fields of the Rulefit object.
     Args:
       x -             Pandas dataframe of training data. 
@@ -423,7 +447,7 @@ class RuleFit(object):
     Returns:
       A tuple of (cross-validated criterion value, associated 
       uncertainty estimate, number of terms in the model) 
-    """
+    """ # }}}
 
 
     # Set default values
@@ -506,15 +530,22 @@ def main():
   boston = pd.read_csv('./datasets/boston.csv', index_col=False)
   boston['target'] = np.select([boston.medv > boston.medv.quantile(0.5)],
                                  [1], [-1])
+  boston['lstat_cat'] = pd.cut(boston.lstat, 10,
+      labels=['a','b','c','d','e','f','g','h','i','j']) 
+  boston.drop('lstat', axis=1, inplace=True)
+
   rf_path_w = '/home/riley/R/x86_64-pc-linux-gnu-library/3.3/Rulefit'     
   rf_path_h = '/home/riley/R/x86_64-pc-linux-gnu-library/3.3/rulefit'
 
-  model = RuleFit('linux',rf_path_w)
+  model = RuleFit('linux',rf_path_h, './logs/rulefit.log')
   model.fit(x=boston.drop(['medv', 'target'], axis=1),
             y=boston['target'],
-            rfmode='class', tree_size=5, mod_sel=3)
+            rfmode='class', tree_size=5, mod_sel=3,
+            max_rules=500)
+  model.generate_rules(beg=1, end=2000)
+  pprint(model._rules)
 
-  model.generate_intr_effects(nval=100, n=10, quiet=False, plot=True)
+  # model.generate_intr_effects(nval=100, n=10, quiet=False, plot=True)
   
   # two_var_int = model.two_var_intr_effects(
       # target='rm',
