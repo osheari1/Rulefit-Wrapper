@@ -5,7 +5,7 @@ import numpy as np
 from pprint import pprint
 
 
-def get_logger(log_path):# {{
+def get_logger(log_path):# {{{
   logger = logging.getLogger(__name__)
   
   if os.path.exists(os.path.join(log_path)):
@@ -14,10 +14,9 @@ def get_logger(log_path):# {{
   formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
   file_hdler.setFormatter(formatter)
   logger.addHandler(file_hdler)
-  return logger# }}
+  return logger# }}}
 
-# TODO: Convert strings to int/float/np.inf ect.
-def parse_rules(path):
+def parse_rules(path):# {{{
   """ Function that parses the output given by the R rulefit rules function and
       returns the rules in a dictionary format.
   Returns:
@@ -37,7 +36,7 @@ def parse_rules(path):
   """
   with open(path) as f:
     rules_in = f.readlines()
-  
+   
   # First three lines are useless
   rules_in = rules_in[3:]
   rules_l = []
@@ -56,7 +55,7 @@ def parse_rules(path):
 
     # New rule
     elif line[0] == 'Rule':  
-      current_rule = line[0]+' '+line[1] 
+      current_rule = int(line[1])
       rules[current_rule] = {'info': {}}
       if line[-1] != 'variables':
         rules[current_rule]['type'] = 'lin'
@@ -108,11 +107,11 @@ def parse_rules(path):
     
     # Add tracker for previous line
     prev_line = line  
-  return rules 
+  return rules # }}}
 
 
-if __name__ == '__main__':
-  rules_path = \
-  '/home/riley/R/x86_64-pc-linux-gnu-library/3.3/rulefit/rulesout.hlp'
-  pprint(parse_rules(rules_path))
+# if __name__ == '__main__':
+  # rules_path = \
+  # '/home/riley/R/x86_64-pc-linux-gnu-library/3.3/rulefit/rulesout.hlp'
+  # pprint(parse_rules(rules_path))
    

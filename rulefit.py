@@ -28,6 +28,9 @@ class RuleFit(object):
     self.logger = utils.get_logger(log_path if log_path else \
                                             os.path.join(os.getcwd(),
                                                          'rulefit.log'))
+  @property
+  def rules(self):
+    return self._rules
 
   @property
   def xval_results(self):
@@ -106,15 +109,14 @@ class RuleFit(object):
 
 # }}}
 
-  def generate_rules(self, beg=1, end=2000, x=None, wt=None):
+  def generate_rules(self, beg=1, end=2000, x=None, wt=None):# {{{
     """ Extract generated rules from model object.
     """
 
     if not wt:
-      wt=np.arange(1, self.data['x'].shape[0] + 1) 
+      wt = np.arange(1, self.data['x'].shape[0] + 1) 
     if not x:
       x = rinterface.NULL
-
 
     rules_str = """
                 function(beg, end, x, wt){
@@ -130,9 +132,8 @@ class RuleFit(object):
                 """
     self.logger.info("Generating rules ...")
     robjects.r(rules_str)(beg, end, x, wt)
-    self._rules = utils.parse_rules(os.path.join(self.rfhome,'rulesout.hlp'))
+    self._rules = utils.parse_rules(os.path.join(self.rfhome,'rulesout.hlp'))# }}}
     
-
 # ===== Variable Interactions ===== {{{
   def _generate_interaction_null_models(self, n, quiet): #{{{
     """ Generates bootstrapped null interaction models to calibrate 
@@ -536,6 +537,7 @@ def main():
             max_rules=500)
   model.generate_rules(beg=1, end=2000)
   pprint(model._rules)
+
   # model.generate_intr_effects(nval=100, n=10, quiet=False, plot=True)
   
   # two_var_int = model.two_var_intr_effects(
