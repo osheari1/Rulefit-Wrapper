@@ -10,7 +10,7 @@ import rpy2.robjects as robjects
 import rpy2.robjects.packages as rpackages
 import rpy2.rinterface as rinterface
 import ggplot as gg
-
+import time
 
 from pprint import pprint
 
@@ -109,38 +109,6 @@ class RuleFit(object):
 
 # }}}
 
-  def generate_rules(self, x=None, wt=None):# {{{
-    """ Extract generated rules from model object. This populations the rules
-        property.
-    Args:
-      beg - Starting rule number (most important)
-      end - Ending 
-      x - A pandas dataframe containing a subset of datapoints over which to 
-          calculate rule importance.
-      wt - A list of weights for observations stored in x. 
-    """
-
-    if not wt:
-      wt = np.arange(1, self.data['x'].shape[0] + 1) 
-    if not x:
-      x = rinterface.NULL
-
-    rules_str = """
-                function(beg, end, x, wt){
-                  if(end > integer(fit[[1]][length(fit[[1]])])){
-                    end <- as.integer(fit[[1]][length(fit[[1]])])
-                  } 
-                  if(!is.null(x)){
-                    rules(beg, end, x, wt)
-                  } else {
-                    rules(beg=beg, end=end, wt=wt)
-                  }
-                }
-                """
-    self.logger.info("Generating rules ...")
-    robjects.r(rules_str)(beg, end, x, wt)
-    self._rules = utils.parse_rules(os.path.join(self.rfhome,'rulesout.hlp'))# }}}
-    
 # ===== Variable Interactions ===== {{{
   def _generate_interaction_null_models(self, n, quiet): #{{{
     """ Generates bootstrapped null interaction models to calibrate 
@@ -312,6 +280,50 @@ class RuleFit(object):
       print(p)
     return interact# }}}
 # }}}
+
+  def single_partial_dependency(self, vars):
+    """
+    """
+    dep_str = """
+              function(vars){
+                singleplot(vars)
+              }
+              """
+    robjects.r(dep_str)(robjects.Vector(np.array(vars)))
+
+  def _generate_rules(self, x=None, wt=None):# {{{
+    """ Extract generated rules from model object. This populations the rules
+        property.
+    Args:
+      beg - Starting rule number (most important)
+      end - Ending 
+      x - A pandas dataframe containing a subset of datapoints over which to 
+          calculate rule importance.
+      wt - A list of weights for observations stored in x. 
+    """
+
+    if not wt:
+      wt = np.arange(1, self.data['x'].shape[0] + 1) 
+    if not x:
+      x = rinterface.NULL
+
+    rules_str = """
+                function(x, wt){
+                  beg = 1
+                  end = 99999999
+                  if(end > integer(fit[[1]][length(fit[[1]])])){
+                    end <- as.integer(fit[[1]][length(fit[[1]])])
+                  } 
+                  if(!is.null(x)){
+                    rules(beg, end, x, wt)
+                  } else {
+                    rules(beg=beg, end=end, wt=wt)
+                  }
+                }
+                """
+    self.logger.info("Generating rules ...")
+    robjects.r(rules_str)(x, wt)
+    self._rules = utils.parse_rules(os.path.join(self.rfhome,'rulesout.hlp'))# }}}
 
   def predict(self, x):# {{{
     """ Predict values using a trained model
@@ -542,8 +554,11 @@ def main():
             y=boston['target'],
             rfmode='class', tree_size=5, mod_sel=3,
             max_rules=500)
-  model.generate_rules(beg=1, end=2000)
-  pprint(model._rules)
+
+  model._generate_rules()
+  # pprint(model._rules)
+  model.single_partial_dependency([1, 2])
+  time.sleep(500) 
 
   # model.generate_intr_effects(nval=100, n=10, quiet=False, plot=True)
   
@@ -555,7 +570,7 @@ def main():
       # tvar1='rm',
       # tvar2='dis',
       # vars=list(set(model.data['x'].columns.values).difference(['rm', 'dis'])))
-
+  
 
 if __name__ == '__main__':
 
