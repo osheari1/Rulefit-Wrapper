@@ -281,15 +281,40 @@ class RuleFit(object):
     return interact# }}}
 # }}}
 
-  def single_partial_dependency(self, vars):
-    """
+# ===== Partial Dependancies ===== {{{
+  def single_partial_dependency(self, vars, nav=500):# {{{
+    """ Display single variable partial dependancy plots
+    Args:
+      vars - A list of variable indecies or column names indicated which plots
+             to print.
+      nav - Maximum number of observations used for average calculations.
+            Higher values give more accurate calculations with diminishing
+            returns.
     """
     dep_str = """
-              function(vars){
+              function(vars, nval, nav){
                 singleplot(vars)
               }
               """
-    robjects.r(dep_str)(robjects.Vector(np.array(vars)))
+    if any([type(var) == int for var in vars]):
+      vars = [var+1 for var in vars]
+    robjects.r(dep_str)(robjects.Vector(np.array(vars)), nav)# }}}
+
+  def double_partial_dependencies(self, var1, var2, plot_type='image'):# {{{
+    """ Display two variable dependancy plot.
+    Args:
+      var1 - First variable for calculation
+      var2 - Second variable for calculation. Cannot be the same as the first.
+      plot_type - The top of plot to print. Possible values: 'image', 'contour'
+    """
+    dep_str = """
+              function(var1, var2, plot_type){
+                pairplot(var1, var2, type=plot_type)
+              }
+              """
+    robjects.r(dep_str)(var1, var2, plot_type)# }}}
+
+# }}}
 
   def _generate_rules(self, x=None, wt=None):# {{{
     """ Extract generated rules from model object. This populations the rules
@@ -557,7 +582,9 @@ def main():
 
   model._generate_rules()
   # pprint(model._rules)
-  model.single_partial_dependency([1, 2])
+  # model.single_partial_dependency(list(range(model.data['x'].shape[1])),
+                                  # nav=1000)
+  model.double_partial_dependencies(1, 3, plot_type='contour')
   time.sleep(500) 
 
   # model.generate_intr_effects(nval=100, n=10, quiet=False, plot=True)
