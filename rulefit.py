@@ -17,7 +17,7 @@ from pprint import pprint
 from rpy2.robjects import pandas2ri, numpy2ri
 from rpy2.robjects.packages import importr
 from rpy2.robjects.vectors import StrVector, IntVector
-
+#TODO: Add _generate_rules() to the rules getter, if it does not already exist
 class RuleFit(object):
   """Wrapper for rulefit algorithm in R
   """
